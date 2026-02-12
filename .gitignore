@@ -1,0 +1,50 @@
+# ==========================================================================
+# GITIGNORE CHO DỰ ÁN DATA MINING (INFLUENZA & CLIMATE DATA)
+# ==========================================================================
+
+# 1. Môi trường ảo (Virtual Environments)
+# Tuyệt đối không đẩy thư viện cài đặt lên GitHub
+venv/
+.venv/
+env/
+bin/
+lib/
+include/
+
+# 2. Dữ liệu nặng (Massive Datasets) 
+# Chặn tất cả các định dạng dữ liệu thô từ ERA5, WHO, IHME
+*.csv
+*.nc
+*.grib
+*.xlsx
+*.xls
+*.json
+*.parquet
+*.zip
+*.tar.gz
+*.rar
+
+# Ngoại lệ: Nếu bạn có file CSV cấu hình nhỏ (ví dụ: mapping tên nước)
+# Hãy bỏ comment dòng dưới đây và thay tên file để Git vẫn nhận nó
+# !data/country_mapping.csv
+
+# 3. Jupyter Notebook
+# Chặn các file lưu tạm (checkpoints) - chúng gây rối khi merge
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+# Chặn file tạm khi export notebook
+.node_ipe/
+
+# 4. Python Cache & Logs
+__pycache__/
+*.py[cod]
+*$py.class
+*.log
+
+# 5. Cài đặt của IDE (VS Code, PyCharm)
+.vscode/
+.idea/
+.DS_Store
+
+# 6. File cấu hình bảo mật (nếu bạn có dùng API key cho Google Trends)
+.env
