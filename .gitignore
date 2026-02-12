@@ -11,7 +11,7 @@ include/
 */.ipynb_checkpoints/*
 
 # Dữ liệu lớn (Massive Datasets) - Tránh treo Git
-*.csv
+
 *.nc
 *.grib
 *.json
