@@ -1,0 +1,29 @@
+# Python environment
+venv/
+.venv/
+env/
+bin/
+lib/
+include/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# Dữ liệu lớn (Massive Datasets) - Tránh treo Git
+*.csv
+*.nc
+*.grib
+*.json
+*.parquet
+*.zip
+*.tar.gz
+
+# IDE settings
+.vscode/
+.idea/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
