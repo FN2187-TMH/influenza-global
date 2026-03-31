@@ -14,8 +14,6 @@ include/
 
 *.nc
 *.grib
-*.json
-*.parquet
 *.zip
 *.tar.gz
 
