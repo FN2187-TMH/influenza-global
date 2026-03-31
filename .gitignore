@@ -15,7 +15,7 @@ include/
 *.nc
 *.grib
 *.json
-*.parquet
+
 *.zip
 *.tar.gz
 
@@ -27,3 +27,7 @@ include/
 __pycache__/
 *.py[cod]
 *$py.class
+
+02_EDA_Flu.ipynb
+Data Retrival
+01_Data_Cleaning.ipynb
