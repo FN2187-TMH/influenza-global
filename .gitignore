@@ -27,3 +27,7 @@ include/
 __pycache__/
 *.py[cod]
 *$py.class
+
+02_EDA_Flu.ipynb
+Data Retrival
+
