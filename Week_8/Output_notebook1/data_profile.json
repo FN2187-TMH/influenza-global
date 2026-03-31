@@ -1,0 +1,58 @@
+{
+  "era5_files": [
+    {
+      "n_files": 4,
+      "variables": [
+        "dewpoint_k",
+        "precipitation_m",
+        "temperature_k"
+      ],
+      "lat_range": [
+        -90.0,
+        90.0
+      ],
+      "lon_range": [
+        0.0,
+        359.75
+      ],
+      "lat_resolution": -0.25,
+      "lon_resolution": 0.25,
+      "n_lat": 721,
+      "n_lon": 1440,
+      "n_grid_points": 1038240,
+      "n_timesteps": 5848,
+      "time_start": "2024-01-01",
+      "time_end": "2025-12-31",
+      "n_records_est": 6071627520,
+      "time_freq": "6h"
+    }
+  ],
+  "total_raw_records": 9581238,
+  "total_aggregated_rows": 11960,
+  "compression_ratio": 801.1,
+  "climate_vars": [
+    "temperature_c",
+    "relative_humidity",
+    "precipitation_mm"
+  ],
+  "years_coverage": [
+    2024,
+    2025
+  ],
+  "n_countries_climate": 115,
+  "n_countries_flunet": 176,
+  "n_countries_both": 103,
+  "cms_config": {
+    "w": 544,
+    "d": 6,
+    "epsilon": 0.005,
+    "delta": 0.005
+  },
+  "reservoir_k": 5000,
+  "processing_note": "Spark groupBy MapReduce. Scale: th\u00eam file v\u00e0o ERA5_FILES.",
+  "spark_config": {
+    "driver_memory": "14g",
+    "shuffle_partitions": 8,
+    "arrow_enabled": true
+  }
+}
