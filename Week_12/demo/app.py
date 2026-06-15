@@ -130,7 +130,7 @@ if os.path.exists(model_path):
 
 
 # ══════════════════════════════════════════════════════════════════
-# HELPER: metric card
+# SHARED HELPERS
 # ══════════════════════════════════════════════════════════════════
 def metric_card(title, value, sub=""):
     st.markdown(f"""
@@ -140,6 +140,61 @@ def metric_card(title, value, sub=""):
         <div class="sub">{sub}</div>
     </div>
     """, unsafe_allow_html=True)
+
+
+def find_col(cols, keys):
+    """Tìm tên cột khớp (ưu tiên khớp chính xác, sau đó khớp chứa) — không phân biệt hoa thường."""
+    low = {c.lower(): c for c in cols}
+    for k in keys:
+        if k in low:
+            return low[k]
+    for c in cols:
+        if any(k in c.lower() for k in keys):
+            return c
+    return None
+
+
+# --- Model family classification (dùng cho trang Model Performance) ---
+FAMILY_COLORS = {
+    'A3T-GCN':  '#a78bfa',   # tím — mô hình GNN mới
+    'Ridge':    '#4ecdc4',
+    'GBM':      '#ffa94d',
+    'JL':       '#74c0fc',
+    'Baseline': '#556677',
+    'Other':    '#868e96',
+}
+FAMILY_LABEL = {
+    'A3T-GCN':  'A3T-GCN (spatio-temporal GNN)',
+    'Ridge':    'Ridge (linear)',
+    'GBM':      'GBM / XGBoost (tree)',
+    'JL':       'JL projection',
+    'Baseline': 'Baseline (climate only)',
+    'Other':    'Other',
+}
+
+def model_family(name):
+    n = str(name).lower()
+    if any(k in n for k in ('a3t', 'gnn', 'gcn')): return 'A3T-GCN'
+    if 'baseline' in n:                            return 'Baseline'
+    if 'ridge' in n:                               return 'Ridge'
+    if any(k in n for k in ('gbm', 'xgb', 'boost')): return 'GBM'
+    if 'jl' in n:                                  return 'JL'
+    return 'Other'
+
+def pred_label(col):
+    cl = str(col).lower()
+    if col == 'predicted_cases':                   return 'Predicted (deployed)'
+    if any(k in cl for k in ('a3t', 'gnn', 'gcn')): return 'A3T-GCN'
+    if any(k in cl for k in ('gbm', 'xgb', 'boost')): return 'GBM / XGBoost'
+    if 'ridge' in cl:                              return 'Ridge'
+    return col
+
+def pred_color(col):
+    cl = str(col).lower()
+    if any(k in cl for k in ('a3t', 'gnn', 'gcn')): return '#a78bfa'
+    if any(k in cl for k in ('gbm', 'xgb', 'boost')): return '#ffa94d'
+    if 'ridge' in cl:                              return '#4ecdc4'
+    return '#ff6b6b'
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -189,8 +244,13 @@ if page == "📊 Overview":
                      f"{len(years)} years of data")
     with c3:
         if data['models'] is not None:
-            best = data['models'].loc[data['models']['R2'].idxmax()]
-            metric_card("Best R²", f"{best['R2']:.3f}", f"{best['model']}")
+            _r2 = find_col(data['models'].columns, ['r2', 'r²', 'rsquared'])
+            _mc = find_col(data['models'].columns, ['model', 'model_name', 'name']) or data['models'].columns[0]
+            if _r2:
+                best = data['models'].loc[data['models'][_r2].idxmax()]
+                metric_card("Best R²", f"{best[_r2]:.3f}", f"{best[_mc]}")
+            else:
+                metric_card("Best R²", "N/A", "")
         else:
             metric_card("Best R²", "N/A", "")
     with c4:
@@ -233,7 +293,7 @@ if page == "📊 Overview":
         ("🌡️", "ERA5 Climate", "MapReduce + cos(lat)"),
         ("🔍", "MinHash LSH", "Weather similarity"),
         ("✈️", "Mobility Network", "PageRank + Risk"),
-        ("📈", "Prediction", "XGBoost / GBM"),
+        ("📈", "Prediction", "Ridge · GBM · A3T-GCN"),
         ("🗺️", "Dashboard", "You are here"),
     ]
     for col, (icon, title, desc) in zip(cols, steps):
@@ -490,46 +550,110 @@ elif page == "🔗 Regional Communities":
 
 
 # ══════════════════════════════════════════════════════════════════
-# PAGE: MODEL PERFORMANCE
+# PAGE: MODEL PERFORMANCE  (đã bổ sung A3T-GCN)
 # ══════════════════════════════════════════════════════════════════
 elif page == "🤖 Model Performance":
     st.markdown("# 🤖 Prediction & Model Performance")
-    st.markdown('<p class="tab-header">Baseline (climate only) vs Enhanced (climate + mobility + risk)</p>',
-                unsafe_allow_html=True)
+    st.markdown('<p class="tab-header">Baseline (climate only) · Enhanced (climate + mobility + risk) · '
+                'A3T-GCN (spatio-temporal GNN)</p>', unsafe_allow_html=True)
 
-    # Model comparison
+    # ───────────────────────── Model comparison ─────────────────────────
     if data['models'] is not None:
         mr = data['models'].copy()
+        model_col = find_col(mr.columns, ['model', 'model_name', 'name']) or mr.columns[0]
+        mr['family'] = mr[model_col].map(model_family)
 
-        # Metrics bar charts
+        # sort by R² desc nếu có
+        r2_col = find_col(mr.columns, ['r2', 'r²', 'rsquared'])
+        if r2_col:
+            mr = mr.sort_values(r2_col, ascending=False).reset_index(drop=True)
+
+        # Banner cho A3T-GCN
+        has_gnn = (mr['family'] == 'A3T-GCN').any()
+        if has_gnn:
+            grow = mr[mr['family'] == 'A3T-GCN'].iloc[0]
+            extra = f" · R² = {grow[r2_col]:.3f}" if r2_col else ""
+            st.markdown(
+                f"<div style='background:rgba(167,139,250,0.12);border:1px solid #a78bfa;"
+                f"border-radius:10px;padding:0.7rem 1rem;color:#cbb3ff;'>"
+                f"🧠 <b>A3T-GCN</b> đã được đưa vào so sánh — mạng nơ-ron đồ thị thời gian "
+                f"chạy trên mobility network{extra}.</div>", unsafe_allow_html=True)
+        else:
+            st.info("Chưa thấy model **A3T-GCN** trong `model_results.parquet`. "
+                    "Thêm một dòng có `model='gnn_a3tgcn'` kèm các metric (R2, MAE, F1, RMSE) "
+                    "để nó hiện ở đây — phần code đã sẵn sàng nhận diện.")
+
+        # Metric bar charts (tự dò metric có sẵn, tô màu theo nhóm model)
         st.markdown("### Model Comparison")
-        c1, c2, c3 = st.columns(3)
+        metric_specs, seen = [], set()
+        for keys, higher, label in [(['r2', 'r²'], True, 'R²'),
+                                     (['test rmse', 'test_rmse', 'rmse'], False, 'RMSE'),
+                                     (['mae'], False, 'MAE'),
+                                     (['f1'], True, 'F1')]:
+            col = find_col(mr.columns, keys)
+            if col and col not in seen:
+                seen.add(col)
+                metric_specs.append((col, higher, label))
 
-        for col_widget, metric, higher_better in [(c1, 'R2', True), (c2, 'MAE', False), (c3, 'F1', True)]:
-            with col_widget:
-                if metric in mr.columns:
-                    colors = ['#4ecdc4' if 'enhanced' in m else '#556677' for m in mr['model']]
-                    fig = px.bar(mr, x='model', y=metric, color='model',
-                                 color_discrete_sequence=colors,
-                                 title=f'{metric} ({"↑" if higher_better else "↓"} better)')
+        if metric_specs:
+            chart_cols = st.columns(len(metric_specs))
+            for cwidget, (mcol, higher, label) in zip(chart_cols, metric_specs):
+                with cwidget:
+                    fig = px.bar(mr, x=model_col, y=mcol, color='family',
+                                 color_discrete_map=FAMILY_COLORS,
+                                 category_orders={model_col: mr[model_col].tolist()},
+                                 title=f'{label} ({"↑" if higher else "↓"} better)')
                     fig.update_layout(template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)',
-                                      plot_bgcolor='rgba(15,25,35,0.8)', height=300,
-                                      showlegend=False, xaxis_tickangle=-45)
+                                      plot_bgcolor='rgba(15,25,35,0.8)', height=320,
+                                      showlegend=False, xaxis_tickangle=-40, xaxis_title=None,
+                                      margin=dict(t=46, b=10))
                     st.plotly_chart(fig, use_container_width=True)
 
-        # Improvement highlight
-        if 'R2' in mr.columns:
-            baseline_r2 = mr[mr['model'].str.contains('baseline')]['R2'].max()
-            enhanced_r2 = mr[mr['model'].str.contains('enhanced') & ~mr['model'].str.contains('jl')]['R2'].max()
-            if pd.notna(baseline_r2) and pd.notna(enhanced_r2):
-                improvement = enhanced_r2 - baseline_r2
+        # Improvement highlight (robust)
+        if r2_col:
+            base = mr.loc[mr['family'] == 'Baseline', r2_col]
+            enh = mr.loc[mr[model_col].astype(str).str.contains('enhanced', case=False)
+                         & (mr['family'] != 'Baseline'), r2_col]
+            if len(base) and len(enh):
+                improvement = enh.max() - base.max()
                 st.success(f"🚀 Mobility network **improves R² by {improvement:+.4f}** "
-                          f"(Baseline: {baseline_r2:.4f} → Enhanced: {enhanced_r2:.4f})")
+                           f"(Baseline {base.max():.4f} → Enhanced {enh.max():.4f})")
 
-        # Full table
-        st.dataframe(mr, use_container_width=True)
+        # Leaderboard (bảng có tô đậm ô tốt nhất mỗi metric)
+        st.markdown("### Leaderboard")
+        metric_cols = [c for c in mr.columns
+                       if c not in (model_col, 'family') and pd.api.types.is_numeric_dtype(mr[c])]
+        show = mr[[model_col, 'family'] + metric_cols].copy()
+        show['family'] = show['family'].map(FAMILY_LABEL).fillna(show['family'])
+        show = show.rename(columns={model_col: 'model', 'family': 'type'})
 
-    # Per-country predictions
+        higher_cols = [c for c in metric_cols if any(k in c.lower() for k in ('r2', 'r²', 'f1', 'auc', 'acc'))]
+        lower_cols  = [c for c in metric_cols if any(k in c.lower() for k in ('mae', 'rmse', 'mse', 'error'))]
+        fmt = {c: ('{:.1f}' if c in lower_cols else '{:.3f}') for c in metric_cols}
+
+        try:
+            sty = show.style.format(fmt)
+            if higher_cols:
+                sty = sty.highlight_max(subset=higher_cols, color='#2f9e7d')
+            if lower_cols:
+                sty = sty.highlight_min(subset=lower_cols, color='#2f9e7d')
+            st.dataframe(sty, use_container_width=True)
+        except Exception:
+            st.dataframe(show, use_container_width=True)
+        st.caption("Ô xanh = tốt nhất ở mỗi cột. Mô hình triển khai (deployed) thường chọn theo Val RMSE thấp nhất.")
+
+        # A3T-GCN spotlight
+        with st.expander("ℹ️ Về mô hình A3T-GCN (Attention Temporal Graph Convolutional Network)"):
+            st.markdown("""
+- **Kiến trúc:** GNN không gian–thời gian chạy trên *mobility network* — nút là quốc gia, cạnh là tuyến bay với trọng số `log1p(route_count)`.
+- **Đầu vào:** chuỗi tensor 3D `(T, N, F)` gồm đặc trưng động (climate lags, flu cases, mobility) + đặc trưng tĩnh (PageRank, centrality) + sin/cos tuần-trong-năm; thêm **observed-mask channel** cho các tuần thiếu dữ liệu.
+- **Huấn luyện:** cửa sổ look-back `L = 8` tuần, dự báo `t + 2`; **Huber loss** (δ = 1.0), Adam (lr = 1e-2), PyTorch Geometric Temporal.
+- **Vai trò:** baseline spatio-temporal có cơ sở. Trên bộ dữ liệu hiện tại nó xếp sau các mô hình bảng do dữ liệu thưa và đồ thị tĩnh không bám kịp cú sụp đổ di chuyển hàng không 2020 — nhưng đặt nền cho hướng mở rộng khi có đồ thị động và dữ liệu báo cáo dày hơn.
+            """)
+    else:
+        st.warning("model_results.parquet not found")
+
+    # ───────────────────────── Per-country prediction ─────────────────────────
     st.markdown("---")
     st.markdown("### Per-Country Prediction")
 
@@ -539,18 +663,30 @@ elif page == "🤖 Model Performance":
 
     cdf = df_filtered[df_filtered['country_iso3'] == sel_country].sort_values(['year','week'])
 
-    if len(cdf) > 0 and 'actual_cases' in cdf.columns and 'predicted_cases' in cdf.columns:
+    # dò các cột prediction (hỗ trợ nhiều model nếu parquet có, vd: pred_gnn_a3tgcn, pred_ridge…)
+    pred_candidates = [c for c in cdf.columns if 'pred' in c.lower() and 'actual' not in c.lower()]
+
+    if len(cdf) > 0 and 'actual_cases' in cdf.columns and pred_candidates:
         cdf_plot = cdf.copy()
         if 'week_id' not in cdf_plot.columns:
-            cdf_plot['week_id'] = cdf_plot['year'].astype(int).astype(str) + '-W' + cdf_plot['week'].astype(int).astype(str).str.zfill(2)
+            cdf_plot['week_id'] = (cdf_plot['year'].astype(int).astype(str) + '-W'
+                                   + cdf_plot['week'].astype(int).astype(str).str.zfill(2))
+
+        default_pred = 'predicted_cases' if 'predicted_cases' in pred_candidates else pred_candidates[0]
+        if len(pred_candidates) > 1:
+            chosen = st.multiselect("Prediction series to overlay", pred_candidates,
+                                    default=[default_pred], format_func=pred_label)
+        else:
+            chosen = [default_pred]
 
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=cdf_plot['week_id'], y=cdf_plot['actual_cases'],
                                  mode='lines', name='Actual', line=dict(color='#4ecdc4', width=2),
                                  fill='tozeroy', fillcolor='rgba(78,205,196,0.1)'))
-        fig.add_trace(go.Scatter(x=cdf_plot['week_id'], y=cdf_plot['predicted_cases'],
-                                 mode='lines', name='Predicted (t+2)',
-                                 line=dict(color='#ff6b6b', width=2, dash='dot')))
+        for pc in chosen:
+            fig.add_trace(go.Scatter(x=cdf_plot['week_id'], y=cdf_plot[pc],
+                                     mode='lines', name=pred_label(pc),
+                                     line=dict(color=pred_color(pc), width=2, dash='dot')))
         fig.update_layout(
             title=f'{sel_country} — Actual vs Predicted Flu Cases',
             template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)',
@@ -561,14 +697,15 @@ elif page == "🤖 Model Performance":
         )
         st.plotly_chart(fig, use_container_width=True)
 
-        # Country metrics
-        cdf_valid = cdf.dropna(subset=['actual_cases', 'predicted_cases'])
+        # Country metrics — tính trên series prediction mặc định
+        metric_pred = 'predicted_cases' if 'predicted_cases' in cdf.columns else default_pred
+        cdf_valid = cdf.dropna(subset=['actual_cases', metric_pred])
         if len(cdf_valid) > 1:
             from sklearn.metrics import r2_score, mean_absolute_error
-            r2 = r2_score(cdf_valid['actual_cases'], cdf_valid['predicted_cases'])
-            mae = mean_absolute_error(cdf_valid['actual_cases'], cdf_valid['predicted_cases'])
+            r2 = r2_score(cdf_valid['actual_cases'], cdf_valid[metric_pred])
+            mae = mean_absolute_error(cdf_valid['actual_cases'], cdf_valid[metric_pred])
             c1, c2, c3 = st.columns(3)
-            with c1: metric_card("R²", f"{r2:.4f}", sel_country)
+            with c1: metric_card("R²", f"{r2:.4f}", f"{sel_country} · {pred_label(metric_pred)}")
             with c2: metric_card("MAE", f"{mae:.0f}", "cases")
             with c3: metric_card("Weeks", f"{len(cdf_valid)}", "predicted")
         elif len(cdf_valid) == 0:
@@ -582,6 +719,6 @@ st.markdown("---")
 st.markdown("""
 <div style="text-align:center; color:#556677; font-size:0.8rem; padding:1rem 0;">
     MoMD Project — Influenza Surveillance Dashboard<br>
-    Algorithms: MapReduce · MinHash LSH · PageRank · Streaming · Gradient Boosting
+    Algorithms: MapReduce · MinHash LSH · PageRank · Streaming · Gradient Boosting · A3T-GCN
 </div>
 """, unsafe_allow_html=True)
